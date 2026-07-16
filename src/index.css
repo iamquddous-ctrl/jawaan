@@ -1,0 +1,114 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=Inter:wght@400;500;600;700;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+
+  --color-[#1B2A4A]: #002B5B;
+  --color-[#E6A11E]: #FFB200;
+  --color-[#152039]: #001c3d;
+  --color-[#d49015]: #e0a200;
+
+  --color-slate-950: #002B5B;
+  --color-slate-900: #001c3d;
+  --color-slate-850: #00224a;
+  --color-slate-800: #002B5B;
+  --color-slate-50: #F8FAFC;
+  --color-slate-100: #E2E8F0;
+  
+  --color-emerald-500: #22C55E;
+  --color-emerald-600: #16A34A;
+}
+
+/* Precise Overrides for Vibrant Palette matching */
+:root {
+  --brand-blue: #002B5B;
+  --brand-yellow: #FFB200;
+  --brand-yellow-hover: #e0a200;
+  --brand-bg: #F8FAFC;
+  --brand-dark-blue: #001c3d;
+  --brand-light-blue: #004080;
+}
+
+/* Global scrollbars and layout */
+body {
+  background-color: #001c3d;
+  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Deep Blue Element overrides */
+.bg-\[\#1B2A4A\] {
+  background-color: var(--brand-blue) !important;
+}
+.text-\[\#1B2A4A\] {
+  color: var(--brand-blue) !important;
+}
+.border-\[\#1B2A4A\] {
+  border-color: var(--brand-blue) !important;
+}
+.hover\:bg-\[\#1B2A4A\]:hover {
+  background-color: var(--brand-light-blue) !important;
+}
+
+/* Gold / Yellow Element overrides */
+.bg-\[\#E6A11E\] {
+  background-color: var(--brand-yellow) !important;
+}
+.text-\[\#E6A11E\] {
+  color: var(--brand-yellow) !important;
+}
+.border-\[\#E6A11E\] {
+  border-color: var(--brand-yellow) !important;
+}
+.hover\:bg-\[\#d49015\]:hover {
+  background-color: var(--brand-yellow-hover) !important;
+}
+.hover\:text-\[\#E6A11E\]:hover {
+  color: var(--brand-yellow) !important;
+}
+
+/* Accent overlays & Opacities */
+.ring-\[\#E6A11E\]\/20 {
+  --tw-ring-color: rgba(255, 178, 0, 0.2) !important;
+}
+.ring-8.ring-emerald-50 {
+  --tw-ring-color: rgba(34, 197, 94, 0.1) !important;
+}
+.bg-emerald-50 {
+  background-color: rgba(34, 197, 94, 0.1) !important;
+}
+.bg-\[\#152039\] {
+  background-color: var(--brand-dark-blue) !important;
+}
+.bg-\[\#1B2A4A\]\/5 {
+  background-color: rgba(0, 43, 91, 0.05) !important;
+}
+.bg-\[\#1B2A4A\]\/10 {
+  background-color: rgba(0, 43, 91, 0.1) !important;
+}
+.border-\[\#1B2A4A\]\/10 {
+  border-color: rgba(0, 43, 91, 0.1) !important;
+}
+.text-\[\#1B2A4A\]\/40 {
+  color: rgba(0, 43, 91, 0.4) !important;
+}
+.border-\[\#E6A11E\]\/40 {
+  border-color: rgba(255, 178, 0, 0.4) !important;
+}
+.bg-\[\#E6A11E\]\/20 {
+  background-color: rgba(255, 178, 0, 0.2) !important;
+}
+.bg-\[\#E6A11E\]\/10 {
+  background-color: rgba(255, 178, 0, 0.1) !important;
+}
+
+/* Custom transitions and visual styling */
+button, a {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Smooth layout containers */
+.app-container-wrap {
+  background-color: var(--brand-bg);
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Jawan Boys Clothing",
+  "description": "Full-featured e-commerce web application for Jawan, an energetic clothing brand for boys, including a modern customer panel and a hidden admin dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
