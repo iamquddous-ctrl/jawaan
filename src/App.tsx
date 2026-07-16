@@ -15,21 +15,35 @@ import Account from './components/Account';
 import AdminPanel from './components/AdminPanel';
 import Footer from './components/Footer';
 import { seedProducts, defaultSettings } from './data';
-import { Product, CartItem, Order, AdminSettings, Category, User, OrderItem } from './types';
-import { Filter, Sparkles, SlidersHorizontal, Grid } from 'lucide-react';
+import { Product, CartItem, Order, AdminSettings, Category, User } from './types';
+import { Filter, Sparkles } from 'lucide-react';
 import { sendAutomatedWhatsAppMessage } from './whatsappService';
+import {
+  fetchProducts,
+  saveAllProducts,
+  saveProduct,
+  fetchOrders,
+  saveOrder,
+  fetchSettings,
+  saveSettings,
+  fetchUser,
+  saveUser,
+} from './firestoreService';
 
 
 export default function App() {
-  // --- IN-MEMORY & LOCAL STORAGE SYNCHRONIZATION ---
+  // --- STATE ----------------------------------------------------------------
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [settings, setSettings] = useState<AdminSettings>(defaultSettings);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // --- ROUTING / VIEW STATE ---
-  const [currentView, setCurrentView] = useState<'home' | 'category' | 'detail' | 'cart' | 'checkout' | 'confirmation' | 'account' | 'admin'>('home');
+  // --- ROUTING STATE --------------------------------------------------------
+  const [currentView, setCurrentView] = useState<
+    'home' | 'category' | 'detail' | 'cart' | 'checkout' | 'confirmation' | 'account' | 'admin'
+  >('home');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'All'>('All');
   const [selectedSubtype, setSelectedSubtype] = useState<string | 'All'>('All');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -37,124 +51,133 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [adminModeEnabled, setAdminModeEnabled] = useState(false);
 
-  // Initialize data on mount
+  // --- INITIALIZE FROM FIREBASE ON MOUNT ------------------------------------
   useEffect(() => {
-    // Products
-    const storedProducts = localStorage.getItem('jawan_products');
-    if (storedProducts) {
-      setProducts(JSON.parse(storedProducts));
-    } else {
-      setProducts(seedProducts);
-      localStorage.setItem('jawan_products', JSON.stringify(seedProducts));
-    }
-
-    // Settings
-    const storedSettings = localStorage.getItem('jawan_settings');
-    if (storedSettings) {
+    async function loadData() {
       try {
-        const parsed = JSON.parse(storedSettings);
-        const updated = {
-          ...defaultSettings,
-          ...parsed
-        };
-        // Auto-enable and auto-configure active Instance ID if not set
-        updated.enableWhatsappApi = true;
-        if (!updated.whatsappApiInstanceId || updated.whatsappApiInstanceId === '') {
-          updated.whatsappApiInstanceId = 'instance184982';
+        // ── Products ──────────────────────────────────────────────────────
+        let loadedProducts = await fetchProducts();
+        if (loadedProducts.length === 0) {
+          // First run: seed Firestore with default products
+          await saveAllProducts(seedProducts);
+          loadedProducts = seedProducts;
         }
-        setSettings(updated);
-        localStorage.setItem('jawan_settings', JSON.stringify(updated));
-      } catch (e) {
-        const initial = { ...defaultSettings, enableWhatsappApi: true, whatsappApiInstanceId: 'instance184982' };
-        setSettings(initial);
-        localStorage.setItem('jawan_settings', JSON.stringify(initial));
+        setProducts(loadedProducts);
+
+        // ── Settings ──────────────────────────────────────────────────────
+        let loadedSettings = await fetchSettings();
+        if (!loadedSettings) {
+          const initial: AdminSettings = {
+            ...defaultSettings,
+            enableWhatsappApi: true,
+            whatsappApiInstanceId: 'instance184982',
+          };
+          await saveSettings(initial);
+          loadedSettings = initial;
+        } else {
+          // Always ensure WhatsApp is enabled and instance ID is set
+          loadedSettings.enableWhatsappApi = true;
+          if (!loadedSettings.whatsappApiInstanceId) {
+            loadedSettings.whatsappApiInstanceId = 'instance184982';
+          }
+        }
+        setSettings(loadedSettings);
+
+        // ── Orders ────────────────────────────────────────────────────────
+        let loadedOrders = await fetchOrders();
+        if (loadedOrders.length === 0) {
+          // Seed demo orders for first run
+          const demoOrders: Order[] = [
+            {
+              id: 'JW_921',
+              customerName: 'Sarah Khan',
+              phone: '+92 321 4455667',
+              whatsapp: '+92 321 4455667',
+              email: 'sarah.k@gmail.com',
+              deliveryAddress: 'House 23, Block 4, DHA Phase 6',
+              city: 'Karachi',
+              area: 'DHA Phase 6',
+              items: [
+                {
+                  productId: 'p1',
+                  productName: 'Jawan Signature Polo',
+                  price: 1850.00,
+                  quantity: 2,
+                  size: '7-8yr',
+                  color: 'Navy Blue',
+                  image: seedProducts[0].images[0],
+                },
+              ],
+              subtotal: 3700.00,
+              deliveryCharge: 250.00,
+              total: 3950.00,
+              paymentMethod: 'Cash on Delivery (COD)',
+              status: 'Delivered',
+              date: '2026-07-10T10:30:00Z',
+            },
+            {
+              id: 'JW_922',
+              customerName: 'Zain Ahmed',
+              phone: '+92 300 9876543',
+              whatsapp: '+92 300 9876543',
+              email: 'zain_ahmed@yahoo.com',
+              deliveryAddress: 'Apartment B-12, Gulberg Green Towers',
+              city: 'Lahore',
+              area: 'Gulberg',
+              items: [
+                {
+                  productId: 'p4',
+                  productName: 'Streetwear Baggy Cargo Trousers',
+                  price: 2800.00,
+                  quantity: 1,
+                  size: '9-10yr',
+                  color: 'Olive Green',
+                  image: seedProducts[3].images[0],
+                },
+              ],
+              subtotal: 2800.00,
+              deliveryCharge: 250.00,
+              total: 3050.00,
+              paymentMethod: 'Cash on Delivery (COD)',
+              status: 'Pending',
+              date: '2026-07-13T16:45:00Z',
+            },
+          ];
+          for (const o of demoOrders) await saveOrder(o);
+          loadedOrders = demoOrders;
+        }
+        setOrders(loadedOrders);
+
+        // ── Current user session (localStorage is fine for session only) ──
+        const storedUser = localStorage.getItem('jawan_currentUser');
+        if (storedUser) setCurrentUser(JSON.parse(storedUser));
+
+        // ── Cart (localStorage is fine — it's device-specific) ────────────
+        const storedCart = localStorage.getItem('jawan_cart');
+        if (storedCart) setCart(JSON.parse(storedCart));
+
+      } catch (err) {
+        console.error('[Firebase] Error loading data:', err);
+        // Fallback to localStorage if Firebase fails
+        const sp = localStorage.getItem('jawan_products');
+        if (sp) setProducts(JSON.parse(sp)); else setProducts(seedProducts);
+        const ss = localStorage.getItem('jawan_settings');
+        if (ss) setSettings(JSON.parse(ss));
+        const so = localStorage.getItem('jawan_orders');
+        if (so) setOrders(JSON.parse(so));
+        const su = localStorage.getItem('jawan_currentUser');
+        if (su) setCurrentUser(JSON.parse(su));
+        const sc = localStorage.getItem('jawan_cart');
+        if (sc) setCart(JSON.parse(sc));
+      } finally {
+        setLoading(false);
       }
-    } else {
-      const initial = { ...defaultSettings, enableWhatsappApi: true, whatsappApiInstanceId: 'instance184982' };
-      setSettings(initial);
-      localStorage.setItem('jawan_settings', JSON.stringify(initial));
     }
 
-    // Orders
-    const storedOrders = localStorage.getItem('jawan_orders');
-    if (storedOrders) {
-      setOrders(JSON.parse(storedOrders));
-    } else {
-      // Seed default mock orders for admin demonstration
-      const initialMockOrders: Order[] = [
-        {
-          id: 'JW_921',
-          customerName: 'Sarah Khan',
-          phone: '+92 321 4455667',
-          whatsapp: '+92 321 4455667',
-          email: 'sarah.k@gmail.com',
-          deliveryAddress: 'House 23, Block 4, DHA Phase 6',
-          city: 'Karachi',
-          area: 'DHA Phase 6',
-          items: [
-            {
-              productId: 'p1',
-              productName: 'Jawan Signature Polo',
-              price: 1850.00,
-              quantity: 2,
-              size: '7-8yr',
-              color: 'Navy Blue',
-              image: seedProducts[0].images[0]
-            }
-          ],
-          subtotal: 3700.00,
-          deliveryCharge: 250.00,
-          total: 3950.00,
-          paymentMethod: 'Cash on Delivery (COD)',
-          status: 'Delivered',
-          date: '2026-07-10T10:30:00Z'
-        },
-        {
-          id: 'JW_922',
-          customerName: 'Zain Ahmed',
-          phone: '+92 300 9876543',
-          whatsapp: '+92 300 9876543',
-          email: 'zain_ahmed@yahoo.com',
-          deliveryAddress: 'Apartment B-12, Gulberg Green Towers',
-          city: 'Lahore',
-          area: 'Gulberg',
-          items: [
-            {
-              productId: 'p4',
-              productName: 'Streetwear Baggy Cargo Trousers',
-              price: 2800.00,
-              quantity: 1,
-              size: '9-10yr',
-              color: 'Olive Green',
-              image: seedProducts[3].images[0]
-            }
-          ],
-          subtotal: 2800.00,
-          deliveryCharge: 250.00,
-          total: 3050.00,
-          paymentMethod: 'Cash on Delivery (COD)',
-          status: 'Pending',
-          date: '2026-07-13T16:45:00Z'
-        }
-      ];
-      setOrders(initialMockOrders);
-      localStorage.setItem('jawan_orders', JSON.stringify(initialMockOrders));
-    }
-
-    // Active User session
-    const storedUser = localStorage.getItem('jawan_currentUser');
-    if (storedUser) {
-      setCurrentUser(JSON.parse(storedUser));
-    }
-
-    // Active Cart
-    const storedCart = localStorage.getItem('jawan_cart');
-    if (storedCart) {
-      setCart(JSON.parse(storedCart));
-    }
+    loadData();
   }, []);
 
-  // Listen for hash routing (e.g. #JawanAdmin or #admin)
+  // --- HASH ROUTING ---------------------------------------------------------
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.toLowerCase();
@@ -163,53 +186,62 @@ export default function App() {
         setCurrentView('admin');
       }
     };
-
     window.addEventListener('hashchange', handleHashChange);
-    handleHashChange(); // Run on load
-
+    handleHashChange();
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Sync state to local storage helper functions
-  const updateLocalProducts = (newProducts: Product[]) => {
+  // --- DATA UPDATE HELPERS (Firebase + localStorage fallback) ---------------
+
+  const updateProducts = async (newProducts: Product[]) => {
     setProducts(newProducts);
     localStorage.setItem('jawan_products', JSON.stringify(newProducts));
+    try {
+      await saveAllProducts(newProducts);
+    } catch (e) {
+      console.error('[Firebase] Failed to save products:', e);
+    }
   };
 
-  const updateLocalOrders = (newOrders: Order[]) => {
+  const updateOrders = async (newOrders: Order[]) => {
     setOrders(newOrders);
     localStorage.setItem('jawan_orders', JSON.stringify(newOrders));
+    // Save only the first (newest) order to avoid redundant writes on bulk updates
+    try {
+      if (newOrders.length > 0) await saveOrder(newOrders[0]);
+    } catch (e) {
+      console.error('[Firebase] Failed to save order:', e);
+    }
   };
 
-  const updateLocalSettings = (newSettings: AdminSettings) => {
+  const updateSettings = async (newSettings: AdminSettings) => {
     setSettings(newSettings);
     localStorage.setItem('jawan_settings', JSON.stringify(newSettings));
+    try {
+      await saveSettings(newSettings);
+    } catch (e) {
+      console.error('[Firebase] Failed to save settings:', e);
+    }
   };
 
-  // --- CART MANAGEMENT OPERATIONS ---
-  const handleAddToCart = (product: Product, size: string, color: string, quantity: number = 1, waist?: string) => {
+  // --- CART MANAGEMENT ------------------------------------------------------
+
+  const handleAddToCart = (product: Product, size: string, color: string, quantity = 1, waist?: string) => {
     const itemId = waist ? `${product.id}-${size}-${color}-${waist}` : `${product.id}-${size}-${color}`;
     let updatedCart = [...cart];
     const existingIndex = cart.findIndex(item => item.id === itemId);
 
     if (existingIndex > -1) {
-      // Add quantity to existing cart record
-      const newQuantity = updatedCart[existingIndex].quantity + quantity;
-      // Guard stock limits
-      if (newQuantity <= product.stockQuantity) {
-        updatedCart[existingIndex].quantity = newQuantity;
-      } else {
-        updatedCart[existingIndex].quantity = product.stockQuantity;
-      }
+      const newQty = updatedCart[existingIndex].quantity + quantity;
+      updatedCart[existingIndex].quantity = Math.min(newQty, product.stockQuantity);
     } else {
-      // Fresh add
       updatedCart.push({
         id: itemId,
         product,
         selectedSize: size,
         selectedColor: color,
         selectedWaist: waist,
-        quantity: Math.min(quantity, product.stockQuantity)
+        quantity: Math.min(quantity, product.stockQuantity),
       });
     }
 
@@ -218,15 +250,11 @@ export default function App() {
   };
 
   const handleUpdateCartQuantity = (itemId: string, newQuantity: number) => {
-    const updatedCart = cart.map(item => {
-      if (item.id === itemId) {
-        return {
-          ...item,
-          quantity: Math.min(newQuantity, item.product.stockQuantity)
-        };
-      }
-      return item;
-    });
+    const updatedCart = cart.map(item =>
+      item.id === itemId
+        ? { ...item, quantity: Math.min(newQuantity, item.product.stockQuantity) }
+        : item
+    );
     setCart(updatedCart);
     localStorage.setItem('jawan_cart', JSON.stringify(updatedCart));
   };
@@ -237,121 +265,114 @@ export default function App() {
     localStorage.setItem('jawan_cart', JSON.stringify(updatedCart));
   };
 
-  // --- ORDER PLACEMENT AND NOTIFICATION TRIGGER ---
+  // --- ORDER PLACEMENT ------------------------------------------------------
+
   const handlePlaceOrder = async (orderData: Omit<Order, 'id' | 'date' | 'status'>) => {
-    // Generate order receipt ID
     const orderId = 'JW_' + Math.floor(100 + Math.random() * 900) + Date.now().toString().slice(-4);
-    
+
     const newOrder: Order = {
       ...orderData,
       id: orderId,
       status: 'Pending',
-      date: new Date().toISOString()
+      date: new Date().toISOString(),
     };
 
-    // Deduct stock quantities for purchased items
+    // Deduct stock
     const updatedProducts = products.map(prod => {
       const orderItem = orderData.items.find(it => it.productId === prod.id);
       if (orderItem) {
-        const remainingStock = Math.max(0, prod.stockQuantity - orderItem.quantity);
-        return {
-          ...prod,
-          stockQuantity: remainingStock
-        };
+        return { ...prod, stockQuantity: Math.max(0, prod.stockQuantity - orderItem.quantity) };
       }
       return prod;
     });
 
-    // Update global databases
-    updateLocalProducts(updatedProducts);
-    updateLocalOrders([newOrder, ...orders]);
+    await updateProducts(updatedProducts);
+
+    // Save new order to Firebase directly
+    const newOrders = [newOrder, ...orders];
+    setOrders(newOrders);
+    localStorage.setItem('jawan_orders', JSON.stringify(newOrders));
+    try {
+      await saveOrder(newOrder);
+    } catch (e) {
+      console.error('[Firebase] Failed to save new order:', e);
+    }
 
     // Clear cart
     setCart([]);
     localStorage.removeItem('jawan_cart');
 
-    // Save context for confirmation receipt
     setLastPlacedOrder(newOrder);
     setCurrentView('confirmation');
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    // AUTOMATED BACKGROUND WHATSAPP DISPATCH
+    // WhatsApp notifications
     if (settings.enableWhatsappApi) {
-      console.log(`[WhatsApp API Trigger] Attempting automated background dispatch for Order #${orderId}`);
-      const itemsListText = newOrder.items.map(it => `- ${it.productName} (Size: ${it.size.toUpperCase()}, Color: ${it.color}, Qty: ${it.quantity})`).join('\n');
-      
-      // 1. Message to Customer
+      const itemsListText = newOrder.items
+        .map(it => `- ${it.productName} (Size: ${it.size.toUpperCase()}, Color: ${it.color}, Qty: ${it.quantity})`)
+        .join('\n');
+
       const customerMsg = `Hello *${newOrder.customerName}*! 👋\n\nThank you for shopping with *${settings.brandName || 'Jawan'}*! We have successfully received your order *#${newOrder.id}*.\n\n*Order Details:*\n${itemsListText}\n\n*Cart Subtotal:* Rs. ${newOrder.subtotal.toLocaleString()}\n*Delivery Charge:* Rs. ${newOrder.deliveryCharge.toLocaleString()}\n*Total Payable:* Rs. ${newOrder.total.toLocaleString()} (Cash on Delivery)\n*Shipping Address:* ${newOrder.deliveryAddress}, ${newOrder.city}\n\nWe will review and dispatch your order shortly! Thank you! 😊`;
-      
-      // 2. Message to Admin
       const adminMsg = `🔔 *New Order Alert #${newOrder.id}* 🔔\n\n*Customer:* ${newOrder.customerName}\n*Phone:* ${newOrder.phone}\n*WhatsApp:* ${newOrder.whatsapp}\n*City:* ${newOrder.city}\n*Address:* ${newOrder.deliveryAddress}\n\n*Ordered Items:*\n${itemsListText}\n\n*Total Payable:* Rs. ${newOrder.total.toLocaleString()} (COD)`;
 
-      // Run dispatches in background without blocking UI
       Promise.all([
-        // Send to Customer
-        sendAutomatedWhatsAppMessage({
-          to: newOrder.whatsapp,
-          message: customerMsg,
-          settings
-        }),
-        // Send to Admin
-        sendAutomatedWhatsAppMessage({
-          to: settings.storeWhatsapp,
-          message: adminMsg,
-          settings
-        })
-      ]).then(([customerRes, adminRes]) => {
-        console.log('[WhatsApp API Result] Customer dispatch:', customerRes, 'Admin dispatch:', adminRes);
-      }).catch(err => {
-        console.error('[WhatsApp API Error] Async execution failed:', err);
-      });
+        sendAutomatedWhatsAppMessage({ to: newOrder.whatsapp, message: customerMsg, settings }),
+        sendAutomatedWhatsAppMessage({ to: settings.storeWhatsapp, message: adminMsg, settings }),
+      ]).catch(err => console.error('[WhatsApp API Error]', err));
     }
 
-    // EMAILJS NOTIFICATION PIPELINE (PRESET)
-    const serviceId = settings.emailjsServiceId || 'service_jawan';
-    const templateId = settings.emailjsTemplateId || 'template_jawan';
-    const publicKey = settings.emailjsPublicKey || 'user_jawan_public_key';
-
-    console.log(`[EmailJS Trigger] Attempting delivery confirmation dispatch for Order #${orderId} to ${newOrder.email}`);
+    // EmailJS
     try {
-      const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      await fetch('https://api.emailjs.com/api/v1.0/email/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          service_id: serviceId,
-          template_id: templateId,
-          user_id: publicKey,
+          service_id: settings.emailjsServiceId || 'service_jawan',
+          template_id: settings.emailjsTemplateId || 'template_jawan',
+          user_id: settings.emailjsPublicKey || 'user_jawan_public_key',
           template_params: {
             to_name: newOrder.customerName,
             order_id: newOrder.id,
             to_email: newOrder.email,
             total_price: `Rs. ${newOrder.total.toLocaleString()}`,
             shipping_address: `${newOrder.deliveryAddress}, ${newOrder.city}`,
-            items_list: newOrder.items.map(it => `${it.productName} (${it.quantity}x) — Size: ${it.size}, Color: ${it.color}`).join(', ')
-          }
-        })
+            items_list: newOrder.items
+              .map(it => `${it.productName} (${it.quantity}x) — Size: ${it.size}, Color: ${it.color}`)
+              .join(', '),
+          },
+        }),
       });
-      if (response.ok) {
-        console.log('[EmailJS Trigger] Confirmation email dispatched successfully!');
-      } else {
-        const errorText = await response.text();
-        console.warn(`[EmailJS Notification] Mail server replied with status ${response.status}: ${errorText}`);
-      }
     } catch (e) {
-      console.error('[EmailJS Failure] Request failed:', e);
+      console.error('[EmailJS Failure]', e);
     }
   };
 
-  // Quick CTA navigation for detail buy now
+  // --- AUTH -----------------------------------------------------------------
+
+  const handleLogin = async (user: User) => {
+    setCurrentUser(user);
+    localStorage.setItem('jawan_currentUser', JSON.stringify(user));
+    // Sync user to Firestore (no password)
+    try {
+      await saveUser(user);
+    } catch (e) {
+      console.error('[Firebase] Failed to save user:', e);
+    }
+    handleNavigate('home');
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('jawan_currentUser');
+    handleNavigate('home');
+  };
+
   const handleBuyNowTrigger = (product: Product, size: string, color: string, quantity: number, waist?: string) => {
-    // Add to cart directly
     handleAddToCart(product, size, color, quantity, waist);
-    // Navigate straight to checkout
     setCurrentView('checkout');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Navigation Orchestrator
   const handleNavigate = (view: typeof currentView, category?: Category) => {
     if (category) {
       setSelectedCategory(category);
@@ -362,35 +383,20 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Logout clean
-  const handleLogout = () => {
-    setCurrentUser(null);
-    localStorage.removeItem('jawan_currentUser');
-    handleNavigate('home');
-  };
+  // --- FILTER LOGIC ---------------------------------------------------------
 
-  const handleLogin = (user: User) => {
-    setCurrentUser(user);
-    localStorage.setItem('jawan_currentUser', JSON.stringify(user));
-    handleNavigate('home');
-  };
-
-  // --- DYNAMIC CATALOG FILTER LOGIC ---
-  // Customers only browse active products, Admin views everything
   const activeProductsPool = products.filter(p => p.isActive);
 
-  // Search logic filter
   const filteredProductsBySearch = activeProductsPool.filter(p => {
-    const query = searchQuery.toLowerCase();
+    const q = searchQuery.toLowerCase();
     return (
-      p.name.toLowerCase().includes(query) ||
-      p.category.toLowerCase().includes(query) ||
-      p.subtype.toLowerCase().includes(query) ||
-      p.description.toLowerCase().includes(query)
+      p.name.toLowerCase().includes(q) ||
+      p.category.toLowerCase().includes(q) ||
+      p.subtype.toLowerCase().includes(q) ||
+      p.description.toLowerCase().includes(q)
     );
   });
 
-  // Category and subtype logic filter
   const finalFilteredProducts = filteredProductsBySearch.filter(p => {
     if (selectedCategory === 'All') return true;
     if (p.category !== selectedCategory) return false;
@@ -398,10 +404,8 @@ export default function App() {
     return p.subtype === selectedSubtype;
   });
 
-  // Featured list for Homepage
   const featuredProducts = activeProductsPool.filter(p => p.isFeatured);
 
-  // Get current subtypes of selected category for sub-navigation tabs
   const getSubtypesForCategory = (cat: Category): string[] => {
     switch (cat) {
       case 'Shirts': return ['Polo Shirts', 'Dress Shirts', 'Casual Shirts'];
@@ -413,18 +417,30 @@ export default function App() {
 
   const currentCategorySubtypes = selectedCategory !== 'All' ? getSubtypesForCategory(selectedCategory) : [];
 
+  // --- LOADING SCREEN -------------------------------------------------------
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm font-bold text-slate-500 tracking-widest uppercase">Loading JAWAN Store...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // --- RENDER ---------------------------------------------------------------
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-800 antialiased">
-      
-      {/* Top Header */}
+
       <Header
         cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)}
         searchQuery={searchQuery}
         setSearchQuery={(q) => {
           setSearchQuery(q);
-          if (currentView !== 'category' && currentView !== 'home') {
-            setCurrentView('home');
-          }
+          if (currentView !== 'category' && currentView !== 'home') setCurrentView('home');
         }}
         onNavigate={handleNavigate}
         currentView={currentView}
@@ -436,17 +452,13 @@ export default function App() {
         tagline={settings.tagline}
       />
 
-      {/* Main Container Wrapper */}
       <main className="flex-1">
-        
-        {/* HOMEPAGE VIEW */}
+
+        {/* HOME */}
         {currentView === 'home' && !searchQuery && (
           <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12 py-6">
-            
-            {/* Hero collection */}
             <Hero onNavigateToCategory={(cat) => handleNavigate('category', cat)} />
 
-            {/* Featured Section */}
             {featuredProducts.length > 0 && (
               <div className="space-y-6">
                 <div className="flex justify-between items-end">
@@ -459,24 +471,19 @@ export default function App() {
                       <span>Best Selling Outfits</span>
                     </h2>
                   </div>
-                  <button 
+                  <button
                     onClick={() => handleNavigate('category', 'Shirts')}
                     className="text-xs font-bold text-[#1B2A4A] hover:text-[#E6A11E] underline transition-colors"
                   >
                     View All Products
                   </button>
                 </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                  {featuredProducts.map((p) => (
+                  {featuredProducts.map(p => (
                     <ProductCard
                       key={p.id}
                       product={p}
-                      onSelectProduct={(prod) => {
-                        setSelectedProduct(prod);
-                        setCurrentView('detail');
-                        window.scrollTo({ top: 0 });
-                      }}
+                      onSelectProduct={(prod) => { setSelectedProduct(prod); setCurrentView('detail'); window.scrollTo({ top: 0 }); }}
                       onAddToCart={(prod, sz, col) => handleAddToCart(prod, sz, col, 1)}
                     />
                   ))}
@@ -484,11 +491,9 @@ export default function App() {
               </div>
             )}
 
-            {/* Aesthetic boys fashion guarantee */}
             <div className="bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-3xl p-8 sm:p-14 shadow-2xl relative overflow-hidden border border-white/5">
               <div className="absolute -right-12 -bottom-12 h-80 w-80 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
               <div className="absolute -left-12 -top-12 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
-              
               <div className="relative z-10 max-w-3xl space-y-5">
                 <span className="text-[9px] font-black tracking-widest text-amber-400 uppercase bg-amber-400/10 border border-amber-400/20 px-3 py-1.5 rounded-full inline-block">
                   Durable playground-ready standards
@@ -501,37 +506,30 @@ export default function App() {
                 </p>
               </div>
             </div>
-
           </div>
         )}
 
-        {/* SEARCHING OR CATEGORY VIEW */}
+        {/* CATEGORY / SEARCH */}
         {(currentView === 'category' || (currentView === 'home' && searchQuery)) && (
           <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
-            
-            {/* Filter title */}
             <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 pb-4 gap-4">
               <div>
                 <span className="text-[10px] font-extrabold text-[#E6A11E] tracking-widest uppercase">
                   {selectedCategory === 'All' ? 'Complete Collection' : `Category: ${selectedCategory}`}
                 </span>
                 <h1 className="text-2xl font-black text-slate-900 mt-1">
-                  {searchQuery 
-                    ? `Search results for &apos;${searchQuery}&apos;` 
-                    : selectedCategory === 'All' 
-                      ? 'Browse All Clothes' 
-                      : `${selectedCategory} Collection`
-                  }
+                  {searchQuery
+                    ? `Search results for '${searchQuery}'`
+                    : selectedCategory === 'All'
+                    ? 'Browse All Clothes'
+                    : `${selectedCategory} Collection`}
                 </h1>
               </div>
-
-              {/* Counts */}
               <span className="text-xs font-bold text-slate-500">
                 Showing {finalFilteredProducts.length} premium designs
               </span>
             </div>
 
-            {/* Sub-navigation categories chips */}
             {selectedCategory !== 'All' && !searchQuery && currentCategorySubtypes.length > 0 && (
               <div className="flex items-center space-x-2 overflow-x-auto pb-2 scrollbar-none">
                 <span className="text-[10px] text-slate-400 font-extrabold flex items-center space-x-1 uppercase mr-2 select-none shrink-0 tracking-wider">
@@ -548,7 +546,7 @@ export default function App() {
                 >
                   All {selectedCategory}
                 </button>
-                {currentCategorySubtypes.map((sub) => (
+                {currentCategorySubtypes.map(sub => (
                   <button
                     key={sub}
                     onClick={() => setSelectedSubtype(sub)}
@@ -564,43 +562,31 @@ export default function App() {
               </div>
             )}
 
-            {/* Empty filter results */}
             {finalFilteredProducts.length === 0 ? (
               <div className="text-center py-20 bg-white rounded-xl border border-slate-100">
                 <p className="text-sm font-semibold text-slate-500 mb-4">No clothes found matching your current filter.</p>
                 <button
-                  onClick={() => {
-                    setSelectedCategory('All');
-                    setSelectedSubtype('All');
-                    setSearchQuery('');
-                  }}
+                  onClick={() => { setSelectedCategory('All'); setSelectedSubtype('All'); setSearchQuery(''); }}
                   className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white hover:bg-[#1B2A4A]"
                 >
                   Reset Filters
                 </button>
               </div>
             ) : (
-              /* Products Grid */
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                {finalFilteredProducts.map((p) => (
+                {finalFilteredProducts.map(p => (
                   <ProductCard
                     key={p.id}
                     product={p}
-                    onSelectProduct={(prod) => {
-                      setSelectedProduct(prod);
-                      setCurrentView('detail');
-                      window.scrollTo({ top: 0 });
-                    }}
+                    onSelectProduct={(prod) => { setSelectedProduct(prod); setCurrentView('detail'); window.scrollTo({ top: 0 }); }}
                     onAddToCart={(prod, sz, col) => handleAddToCart(prod, sz, col, 1)}
                   />
                 ))}
               </div>
             )}
-
           </div>
         )}
 
-        {/* DETAIL PAGE VIEW */}
         {currentView === 'detail' && selectedProduct && (
           <ProductDetail
             product={selectedProduct}
@@ -608,14 +594,10 @@ export default function App() {
             onBack={() => handleNavigate('category', selectedProduct.category)}
             onAddToCart={handleAddToCart}
             onBuyNow={handleBuyNowTrigger}
-            onSelectProduct={(p) => {
-              setSelectedProduct(p);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
+            onSelectProduct={(p) => { setSelectedProduct(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
           />
         )}
 
-        {/* CART VIEW */}
         {currentView === 'cart' && (
           <Cart
             cart={cart}
@@ -626,7 +608,6 @@ export default function App() {
           />
         )}
 
-        {/* SECURE CHECKOUT VIEW */}
         {currentView === 'checkout' && (
           <Checkout
             cart={cart}
@@ -637,7 +618,6 @@ export default function App() {
           />
         )}
 
-        {/* RECEIPT / SUCCESS VIEW */}
         {currentView === 'confirmation' && lastPlacedOrder && (
           <Confirmation
             order={lastPlacedOrder}
@@ -646,37 +626,35 @@ export default function App() {
           />
         )}
 
-        {/* CUSTOMER PORTAL / ORDERS PAGE */}
         {currentView === 'account' && (
           <Account
             currentUser={currentUser}
             orders={orders}
             onLogin={handleLogin}
             onLogout={handleLogout}
-            onRegister={(u) => {
+            onRegister={async (u) => {
               setCurrentUser(u);
               localStorage.setItem('jawan_currentUser', JSON.stringify(u));
+              try { await saveUser(u); } catch (e) { console.error('[Firebase] saveUser failed:', e); }
               handleNavigate('account');
             }}
           />
         )}
 
-        {/* SECURE ADMIN PANEL */}
         {currentView === 'admin' && (
           <AdminPanel
             products={products}
             orders={orders}
             settings={settings}
-            onUpdateProducts={updateLocalProducts}
-            onUpdateOrders={updateLocalOrders}
-            onUpdateSettings={updateLocalSettings}
+            onUpdateProducts={updateProducts}
+            onUpdateOrders={updateOrders}
+            onUpdateSettings={updateSettings}
           />
         )}
 
       </main>
 
-      {/* Discrete Footer access portal */}
-      <Footer 
+      <Footer
         brandName={settings.brandName}
         tagline={settings.tagline}
         onSecretAdminClick={() => {
@@ -684,7 +662,7 @@ export default function App() {
           setCurrentView('admin');
           window.location.hash = '#JawanAdmin';
           window.scrollTo({ top: 0, behavior: 'smooth' });
-        }} 
+        }}
       />
 
     </div>
