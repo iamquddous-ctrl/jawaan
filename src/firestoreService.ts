@@ -31,8 +31,9 @@ export async function fetchProducts(): Promise<Product[]> {
   return snap.docs.map(d => {
     const data = d.data() as Product;
     // Regenerate SVG images dynamically since we don't store them in Firestore
-    const images = (data.colors || []).map((color: string) =>
-      generateClothingSvg(data.subtype || data.name, color)
+    const colors = Array.isArray(data.colors) ? data.colors : [];
+    const images = colors.map((color: string) =>
+      generateClothingSvg(data.subtype || data.name || '', color)
     );
     return { ...data, id: d.id, images };
   });
@@ -81,7 +82,12 @@ export async function fetchOrders(): Promise<Order[]> {
 
 export async function saveOrder(order: Order): Promise<void> {
   const ref = doc(db, ORDERS_COL, order.id);
-  await setDoc(ref, order);
+  // Strip images from order items to avoid Firestore size limits
+  const sanitizedOrder = {
+    ...order,
+    items: order.items.map(item => ({ ...item, image: '' }))
+  };
+  await setDoc(ref, sanitizedOrder);
 }
 
 export async function updateOrderStatus(orderId: string, status: string): Promise<void> {
