@@ -9,16 +9,14 @@ import {
   getDocs,
   getDoc,
   setDoc,
-  addDoc,
   updateDoc,
   deleteDoc,
   query,
   orderBy,
-  writeBatch,
-  DocumentData,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Product, Order, AdminSettings, User } from './types';
+import { generateClothingSvg } from './data';
 
 // ─── Collection names ────────────────────────────────────────────────────────
 const PRODUCTS_COL = 'products';
@@ -30,12 +28,14 @@ const USERS_COL = 'users';
 
 export async function fetchProducts(): Promise<Product[]> {
   const snap = await getDocs(collection(db, PRODUCTS_COL));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as Product));
-}
-
-export async function saveProduct(product: Product): Promise<void> {
-  const ref = doc(db, PRODUCTS_COL, product.id);
-  await setDoc(ref, product);
+  return snap.docs.map(d => {
+    const data = d.data() as Product;
+    // Regenerate SVG images dynamically since we don't store them in Firestore
+    const images = (data.colors || []).map((color: string) =>
+      generateClothingSvg(data.subtype || data.name, color)
+    );
+    return { ...data, id: d.id, images };
+  });
 }
 
 export async function saveAllProducts(products: Product[]): Promise<void> {
@@ -44,23 +44,27 @@ export async function saveAllProducts(products: Product[]): Promise<void> {
   const existingIds = new Set(existingSnap.docs.map(d => d.id));
   const newIds = new Set(products.map(p => p.id));
 
-  const batch = writeBatch(db);
-
-  // Write/update all products in the new list
-  products.forEach(p => {
-    const ref = doc(db, PRODUCTS_COL, p.id);
-    batch.set(ref, p);
-  });
-
-  // Delete products that are no longer in the list
-  existingIds.forEach(id => {
+  // Delete products that are no longer in the list (one by one — more reliable than batch)
+  for (const id of existingIds) {
     if (!newIds.has(id)) {
-      const ref = doc(db, PRODUCTS_COL, id);
-      batch.delete(ref);
+      await deleteDoc(doc(db, PRODUCTS_COL, id));
     }
-  });
+  }
 
-  await batch.commit();
+  // Write/update all products — strip large SVG images to stay under Firestore 1MB limit
+  // Images are generated dynamically from product data so no need to store them
+  for (const p of products) {
+    const ref = doc(db, PRODUCTS_COL, p.id);
+    const { images, ...productWithoutImages } = p;
+    await setDoc(ref, productWithoutImages);
+  }
+}
+
+export async function saveProduct(product: Product): Promise<void> {
+  const ref = doc(db, PRODUCTS_COL, product.id);
+  // Strip images before saving
+  const { images, ...productWithoutImages } = product;
+  await setDoc(ref, productWithoutImages);
 }
 
 export async function deleteProduct(productId: string): Promise<void> {
