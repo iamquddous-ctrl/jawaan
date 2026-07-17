@@ -158,17 +158,10 @@ export default function App() {
 
       } catch (err) {
         console.error('[Firebase] Error loading data:', err);
-        // Fallback to localStorage if Firebase fails
-        const sp = localStorage.getItem('jawan_products');
-        if (sp) setProducts(JSON.parse(sp)); else setProducts(seedProducts);
-        const ss = localStorage.getItem('jawan_settings');
-        if (ss) setSettings(JSON.parse(ss));
-        const so = localStorage.getItem('jawan_orders');
-        if (so) setOrders(JSON.parse(so));
-        const su = localStorage.getItem('jawan_currentUser');
-        if (su) setCurrentUser(JSON.parse(su));
-        const sc = localStorage.getItem('jawan_cart');
-        if (sc) setCart(JSON.parse(sc));
+        alert(`Firebase connection failed: ${err}. Check your environment variables in Vercel.`);
+        // Only use seedProducts as absolute last resort — no localStorage fallback
+        setProducts(seedProducts);
+        setSettings(defaultSettings);
       } finally {
         setLoading(false);
       }
