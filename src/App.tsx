@@ -58,7 +58,11 @@ export default function App() {
         // ── Products ──────────────────────────────────────────────────────
         let loadedProducts = await fetchProducts();
         if (loadedProducts.length === 0) {
-          await saveAllProducts(seedProducts);
+          // First run or all products deleted: seed Firestore with default products
+          console.log('[Firebase] No products found, seeding defaults...');
+          for (const p of seedProducts) {
+            await saveProduct(p);
+          }
           loadedProducts = seedProducts;
         }
         setProducts(loadedProducts);
