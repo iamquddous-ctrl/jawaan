@@ -58,7 +58,6 @@ export default function App() {
         // ── Products ──────────────────────────────────────────────────────
         let loadedProducts = await fetchProducts();
         if (loadedProducts.length === 0) {
-          // First run: seed Firestore with default products
           await saveAllProducts(seedProducts);
           loadedProducts = seedProducts;
         }
@@ -75,7 +74,6 @@ export default function App() {
           await saveSettings(initial);
           loadedSettings = initial;
         } else {
-          // Always ensure WhatsApp is enabled and instance ID is set
           loadedSettings.enableWhatsappApi = true;
           if (!loadedSettings.whatsappApiInstanceId) {
             loadedSettings.whatsappApiInstanceId = 'instance184982';
@@ -86,7 +84,6 @@ export default function App() {
         // ── Orders ────────────────────────────────────────────────────────
         let loadedOrders = await fetchOrders();
         if (loadedOrders.length === 0) {
-          // Seed demo orders for first run
           const demoOrders: Order[] = [
             {
               id: 'JW_921',
@@ -97,17 +94,15 @@ export default function App() {
               deliveryAddress: 'House 23, Block 4, DHA Phase 6',
               city: 'Karachi',
               area: 'DHA Phase 6',
-              items: [
-                {
-                  productId: 'p1',
-                  productName: 'Jawan Signature Polo',
-                  price: 1850.00,
-                  quantity: 2,
-                  size: '7-8yr',
-                  color: 'Navy Blue',
-                  image: seedProducts[0].images[0],
-                },
-              ],
+              items: [{
+                productId: 'p1',
+                productName: 'Jawan Signature Polo',
+                price: 1850.00,
+                quantity: 2,
+                size: '7-8yr',
+                color: 'Navy Blue',
+                image: '',
+              }],
               subtotal: 3700.00,
               deliveryCharge: 250.00,
               total: 3950.00,
@@ -124,17 +119,15 @@ export default function App() {
               deliveryAddress: 'Apartment B-12, Gulberg Green Towers',
               city: 'Lahore',
               area: 'Gulberg',
-              items: [
-                {
-                  productId: 'p4',
-                  productName: 'Streetwear Baggy Cargo Trousers',
-                  price: 2800.00,
-                  quantity: 1,
-                  size: '9-10yr',
-                  color: 'Olive Green',
-                  image: seedProducts[3].images[0],
-                },
-              ],
+              items: [{
+                productId: 'p4',
+                productName: 'Streetwear Baggy Cargo Trousers',
+                price: 2800.00,
+                quantity: 1,
+                size: '9-10yr',
+                color: 'Olive Green',
+                image: '',
+              }],
               subtotal: 2800.00,
               deliveryCharge: 250.00,
               total: 3050.00,
@@ -148,29 +141,21 @@ export default function App() {
         }
         setOrders(loadedOrders);
 
-        // ── Current user session (localStorage is fine for session only) ──
+        // ── Session & Cart ────────────────────────────────────────────────
         const storedUser = localStorage.getItem('jawan_currentUser');
         if (storedUser) setCurrentUser(JSON.parse(storedUser));
-
-        // ── Cart (localStorage is fine — it's device-specific) ────────────
         const storedCart = localStorage.getItem('jawan_cart');
         if (storedCart) setCart(JSON.parse(storedCart));
 
       } catch (err) {
         console.error('[Firebase] Error loading data:', err);
-        alert(`Firebase connection failed: ${err}. Check your environment variables in Vercel.`);
-        // Only use seedProducts as absolute last resort — no localStorage fallback
+        // Fallback to seed data if Firebase fails
         setProducts(seedProducts);
         setSettings(defaultSettings);
       } finally {
         setLoading(false);
       }
     }
-
-    // Clear localStorage so Firebase is always the source of truth
-    localStorage.removeItem('jawan_products');
-    localStorage.removeItem('jawan_orders');
-    localStorage.removeItem('jawan_settings');
 
     loadData();
   }, []);
