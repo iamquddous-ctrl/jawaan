@@ -39,11 +39,27 @@ export async function saveProduct(product: Product): Promise<void> {
 }
 
 export async function saveAllProducts(products: Product[]): Promise<void> {
+  // First, get existing product IDs from Firestore
+  const existingSnap = await getDocs(collection(db, PRODUCTS_COL));
+  const existingIds = new Set(existingSnap.docs.map(d => d.id));
+  const newIds = new Set(products.map(p => p.id));
+
   const batch = writeBatch(db);
+
+  // Write/update all products in the new list
   products.forEach(p => {
     const ref = doc(db, PRODUCTS_COL, p.id);
     batch.set(ref, p);
   });
+
+  // Delete products that are no longer in the list
+  existingIds.forEach(id => {
+    if (!newIds.has(id)) {
+      const ref = doc(db, PRODUCTS_COL, id);
+      batch.delete(ref);
+    }
+  });
+
   await batch.commit();
 }
 
