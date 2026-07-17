@@ -176,35 +176,30 @@ export default function App() {
 
   // --- DATA UPDATE HELPERS (Firebase + localStorage fallback) ---------------
 
-  const updateProducts = async (newProducts: Product[]) => {
+  const updateProducts = (newProducts: Product[]) => {
+    // Update state immediately — don't wait for Firebase
     setProducts(newProducts);
-    localStorage.setItem('jawan_products', JSON.stringify(newProducts));
-    try {
-      await saveAllProducts(newProducts);
-    } catch (e) {
-      console.error('[Firebase] Failed to save products:', e);
-    }
+    // Save to Firebase in background
+    saveAllProducts(newProducts).catch(e =>
+      console.error('[Firebase] Failed to save products:', e)
+    );
   };
 
-  const updateOrders = async (newOrders: Order[]) => {
+  const updateOrders = (newOrders: Order[]) => {
     setOrders(newOrders);
-    localStorage.setItem('jawan_orders', JSON.stringify(newOrders));
-    // Save only the first (newest) order to avoid redundant writes on bulk updates
-    try {
-      if (newOrders.length > 0) await saveOrder(newOrders[0]);
-    } catch (e) {
-      console.error('[Firebase] Failed to save order:', e);
+    // Save newest order to Firebase in background
+    if (newOrders.length > 0) {
+      saveOrder(newOrders[0]).catch(e =>
+        console.error('[Firebase] Failed to save order:', e)
+      );
     }
   };
 
-  const updateSettings = async (newSettings: AdminSettings) => {
+  const updateSettings = (newSettings: AdminSettings) => {
     setSettings(newSettings);
-    localStorage.setItem('jawan_settings', JSON.stringify(newSettings));
-    try {
-      await saveSettings(newSettings);
-    } catch (e) {
-      console.error('[Firebase] Failed to save settings:', e);
-    }
+    saveSettings(newSettings).catch(e =>
+      console.error('[Firebase] Failed to save settings:', e)
+    );
   };
 
   // --- CART MANAGEMENT ------------------------------------------------------
