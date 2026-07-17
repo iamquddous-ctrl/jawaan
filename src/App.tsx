@@ -174,6 +174,11 @@ export default function App() {
       }
     }
 
+    // Clear localStorage so Firebase is always the source of truth
+    localStorage.removeItem('jawan_products');
+    localStorage.removeItem('jawan_orders');
+    localStorage.removeItem('jawan_settings');
+
     loadData();
   }, []);
 
